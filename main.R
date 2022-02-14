@@ -12,14 +12,18 @@
 # https://bioconductor.org/install/
 
 if (!require("BiocManager", quietly = TRUE)){
-
+  install.packages("BiocManager")
 }
+
 if (!require("biomaRt", quietly = TRUE)){
-
+  BiocManager::install("biomaRt")
 }
+
 # load tidyverse and your new bioconductor package
-library()
-library()
+library(tidyverse)
+library(BiocManager)
+library(biomaRt)
+library(dplyr)
 
 #### Loading and processing data ####
 #' Load Expression Data
@@ -35,8 +39,13 @@ library()
 #'
 #' @examples 
 #' `data <- load_expression('/project/bf528/project_1/data/example_intensity_data.csv')`
+
 load_expression <- function(filepath) {
-  return(NULL)
+  uzp = ("/usr4/bf528/sv/Documents/BF_591_Assignment2/data/example_intensity_data.zip")
+  unzip(uzp)
+  expr <- readr::read_delim(unzip(uzp))   
+ 
+  return(expr)
 }
 
 #' Filter 15% of the gene expression values.
@@ -54,9 +63,22 @@ load_expression <- function(filepath) {
 #' `> str(samples)`
 #' `tibble [40,158 × 1] (S3: tbl_df/tbl/data.frame)`
 #' `$ probeids: chr [1:40158] "1007_s_at" "1053_at" "117_at" "121_at" ...`
-filter_15 <- function(tibble){
-  return()
-}
+
+filter_15 <- function(expr){
+  
+  filtered_probeids <- function(spiderman) {
+    probeids_greater_than_3.9 <- spiderman > 3.9
+    mjolnir <- sum(probeids_greater_than_3.9)/length(spiderman)
+    if(mjolnir > 0.15){
+      return(mjolnir)
+    }
+  } 
+  
+  result <- apply(expr[2:ncol(expr)], filtered_probeids, MARGIN = 1)
+  print(result)
+  
+  return(result)
+  }
 
 #### Gene name conversion ####
 
@@ -82,8 +104,17 @@ filter_15 <- function(tibble){
 #' `3        1553551_s_at       MT-TM`
 #' `4        1553551_s_at      MT-ND2`
 #' `5           202860_at     DENND4B`
-affy_to_hgnc <- function(affy_vector) {
-  return()
+
+
+affy_to_hgnc <- function(expr) {
+  Mack <- c("1553551_s_at", "1553570_at")
+  Tarini <- useMart(host = 'https://www.ensembl.org', biomart = 'ENSEMBL_MART_ENSEMBL')
+  Sri <- useDataset('hsapiens_gene_ensembl', useMart('ensembl'))
+  
+  Olivia <- getBM(attributes = c('affy_hg_u133_plus_2', 'hgnc_symbol'),
+      filters = c('affy_hg_u133_plus_2'), values = Mack, mart = Sri)
+
+  return(as_tibble(Olivia))
 }
 
 #### ggplot ####
@@ -117,9 +148,35 @@ affy_to_hgnc <- function(affy_vector) {
 #' `  <chr>       <chr>   <chr>       <dbl>     ...`
 #' `1 202860_at   DENND4B good        7.16      ...`
 #' `2 204340_at   TMEM187 good        6.40      ...`
-reduce_data <- function(expr_tibble, names_ids, good_genes, bad_genes){
-  return()
+
+reduce_data <- function(work_tibble, gene_names, goodGenes, badGenes){
+  df_new <- as.data.frame(gene_names)
+  df_new_1 = data.frame()
+  for(row in 1:nrow(df_new)){
+    item <- df_new[row, ]
+    if(item[2] %in%  goodGenes){
+      item$Classification <- "Good"
+      df_new_1 <- rbind(df_new_1, item)
+    }
+    else if(item[2] %in%  badGenes){
+      item$Classification <- "Bad"
+      df_new_1 <- rbind(df_new_1, item)
+    }
+    return(df_new_1)
+  }
 }
+  
+work_tibble <- tibble(expr)
+goodGenes <- c("PKD1", "NOS3", "AGTR1", "COL4A5", "ECE1", "MEN1", "OLR1", "F7")
+badGenes <- c("TP53", "EGFR", "BRAF", "KRAS", "PIK3CA", "ERBB2", "MAPK1", "NRAS")
+gene_names <- affy_to_hgnc(work_tibble['probeids'])
+
+final_result <- reduce_data(work_tibble, gene_names, goodGenes, badGenes)
+print(as_tibble(final_result))
+
+return(as_tibble(final_result)) 
+
+
 
 #' Plot a boxplot of good and bad genes.
 #'
@@ -133,7 +190,16 @@ reduce_data <- function(expr_tibble, names_ids, good_genes, bad_genes){
 #' converting the _wide_ format of the input tibble to a _long_ format.
 #'
 #' @examples `p <- plot_ggplot(plot_tibble)`
-plot_ggplot <- function(tibble) {
-  return()
+
+plot_ggplot <- function(expr) {
+  
+  expr %>% tidyr::pivot_longer(contains('GSM'), names_to = 'GSM#')
+  Hulk <- ggplot(data = expr, aes(x = hgnc_symbol, y = value)) + 
+    geom_point(color = "green") + 
+    geom_boxplot(aes(item$Classification))
+    labs(title = "Boxplot of 16 somewhat randomly chosen genes like really I just picked some 
+            random cancer ones", x = "Gene", y = "Expression Levels") +
+    theme(axis.text = element_text(family = element_text))
+  return(Hulk)
 }
 
